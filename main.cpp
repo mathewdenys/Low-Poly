@@ -69,6 +69,13 @@ int main(int argc, char** argv)
 	// 1. Load image
 	const std::string inputImageName = argv[1];
 	cv::Mat  imgIn  = cv::imread(inputImageName,cv::IMREAD_COLOR);
+	if(imgIn.empty())
+	{
+		std::cout << "Error opening image: " << inputImageName << '\n';
+		return -1;
+	}
+	if(argc>2) std::cout << "Ignoring additional inputs";
+
 	cv::Size sizeIn = imgIn.size();
 
 	// 2. Extract keypoints
