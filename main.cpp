@@ -77,7 +77,7 @@ int main(int argc, char** argv)
 	if(argc>2)
 		std::cout << "Ignoring additional inputs";
 
-	cv::Size sizeIn = imgIn.size();				// Image dimensions
+	cv::Size sizeIn = imgIn.size();             // Image dimensions
 	int NpixelsIn = sizeIn.width*sizeIn.height; // Total number of pixels (for later use)
 
 	// 1.1 Preprocessing
@@ -89,12 +89,12 @@ int main(int argc, char** argv)
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
 	cv::Mat imgFeatures;
-	int depth = CV_16S; 						  // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
-	cv::Laplacian(imgIn,imgFeatures,depth); 	  // Edge detection
+	int depth = CV_16S;                           // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
+	cv::Laplacian(imgIn,imgFeatures,depth);       // Edge detection
 	cv::convertScaleAbs(imgFeatures,imgFeatures); // Take absolute value of values and convert back to 8 bits
 
 	// 2.2 Select pixels pseudo-randomly
-	std::vector<int> pixels(NpixelsIn);					// Vector for storing pixel numbers
+	std::vector<int> pixels(NpixelsIn);                 // Vector for storing pixel numbers
 	std::iota(std::begin(pixels), std::end(pixels), 0); // Fill with 0, 1, ..., NpixelsIn
 
 	std::vector<int> featuresVector;
@@ -102,16 +102,20 @@ int main(int argc, char** argv)
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
 	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
-	int n = 500; // number of pixels to choose
-	std::vector<int> selectedPixels(n);
-	std::srand(static_cast<unsigned int>(std::time(nullptr))); // Set initial seed value to system clock
-	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);
+	int n = 500;                                                                // Number of pixels to choose
+	std::vector<int> selectedPixels(n+4);                                       // Vector large enough to store n randomly selected pixels, plus the four corners
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));                  // Set initial seed value to system clock
+	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);  // Pseudo-random selection of pixels based on edge detection
+	selectedPixels.push_back(0);                                                // Top left corner
+	selectedPixels.push_back(sizeIn.width-1);                                   // Top right corner
+	selectedPixels.push_back(NpixelsIn-sizeIn.width+1);                         // Bottom right corner
+	selectedPixels.push_back(NpixelsIn);                                        // Bottom left corner
 
 	// 2.3 Add some randomisation / move pixels slightly (todo)
 
 	// 2.4 Visualise selected points
 	cv::Point center;
-	for (int i=0;i<n;i++)
+	for (int i=0; i<selectedPixels.size(); i++)
 	{
 		center = cv::Point{selectedPixels[i]%sizeIn.width,selectedPixels[i]/sizeIn.width};
 		circle(imgFeatures,center,2,CV_RGB(255,255,255),3);
