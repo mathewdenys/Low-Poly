@@ -74,7 +74,8 @@ int main(int argc, char** argv)
 		std::cout << "Error opening image: " << inputImageName << '\n';
 		return -1;
 	}
-	if(argc>2) std::cout << "Ignoring additional inputs";
+	if(argc>2)
+		std::cout << "Ignoring additional inputs";
 
 	cv::Size sizeIn = imgIn.size();
 	int NpixelsIn = sizeIn.width*sizeIn.height;
@@ -86,8 +87,12 @@ int main(int argc, char** argv)
 	// 2. Extract keypoints
 	//  - Select some random points
 	//  - Some randomisation for aesthetic appeal
+	if (!imgIn.depth()==0)
+		std::cout << "Input image has depth!=0; this may need to be addressed";
 	cv::Mat imgFeatures;
-	cv::Laplacian(imgIn,imgFeatures,CV_64F); // Edge detection
+	int depth = CV_16S; // depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
+	cv::Laplacian(imgIn,imgFeatures,depth); // edge detection
+	cv::convertScaleAbs(imgFeatures,imgFeatures); // take absolute value of values and convert back to 8 bits
 
 	std::srand(static_cast<unsigned int>(std::time(nullptr))); // set initial seed value to system clock
 	// todo: use randomSelectionFromDistribution to take a random selection of pixel coordiantes from imgIn using imgFeatures as a distribution
@@ -96,14 +101,10 @@ int main(int argc, char** argv)
 	for (int i=0; i<NpixelsIn; i++)
 		pixels[i] = i;
 
-	std::vector<uchar> featuresVector;
+	std::vector<int> featuresVector;
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
-	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // assumes only one channel (imgFeatures is greyscale)
-
-	// ISSUES:
-	//	1) depth of imgFeatures is 6, which corresponds to float64 values (not int) (?)
-	// 	2) imgFeatures values can be negative, so I need to make them all positive
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
 	int n = 10; // number of pixels to choose
 	//std::vector<int> selectedPixels;
