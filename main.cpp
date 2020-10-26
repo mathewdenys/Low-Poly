@@ -85,8 +85,7 @@ int main(int argc, char** argv)
 	cv::cvtColor(imgIn, imgIn, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
 
 	// 2. Extract keypoints
-	//  - Select some random points
-	//  - Some randomisation for aesthetic appeal
+	// 2.1 Edge detection
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
 	cv::Mat imgFeatures;
@@ -94,8 +93,7 @@ int main(int argc, char** argv)
 	cv::Laplacian(imgIn,imgFeatures,depth); // edge detection
 	cv::convertScaleAbs(imgFeatures,imgFeatures); // take absolute value of values and convert back to 8 bits
 
-	std::srand(static_cast<unsigned int>(std::time(nullptr))); // set initial seed value to system clock
-	// todo: use randomSelectionFromDistribution to take a random selection of pixel coordiantes from imgIn using imgFeatures as a distribution
+	// 2.2 Select pixels pseudo-randomly
 	std::vector<int> pixels;
 	pixels.resize(NpixelsIn);
 	for (int i=0; i<NpixelsIn; i++)
@@ -106,11 +104,21 @@ int main(int argc, char** argv)
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
 	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
-	int n = 10; // number of pixels to choose
-	//std::vector<int> selectedPixels;
-	//selectedPixels.resize(n);
-	//selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);
+	int n = 500; // number of pixels to choose
+	std::vector<int> selectedPixels;
+	selectedPixels.resize(n);
+	std::srand(static_cast<unsigned int>(std::time(nullptr))); // set initial seed value to system clock
+	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);
 
+	// 2.3 Add some randomisation / move pixels slightly (todo)
+
+	// 2.4 Visualise selected points
+	cv::Point center;
+	for (int i=0;i<n;i++)
+	{
+		center = cv::Point{selectedPixels[i]%sizeIn.width,selectedPixels[i]/sizeIn.width};
+		circle(imgFeatures,center,2,CV_RGB(255,255,255),3);
+	}
 
 	// 3. Create polygons
 	//  - Delaunay triangulation
@@ -119,7 +127,7 @@ int main(int argc, char** argv)
 
 	// 5. Export image
 	//cv::Mat imgOut = imgFeatures.clone();
-	cv::imwrite("media/output.jpg",imgIn);
+	cv::imwrite("media/output.jpg",imgFeatures);
 
 	return 0;
 }
