@@ -68,7 +68,7 @@ int main(int argc, char** argv)
 {
 	// 1. Load image
 	const std::string inputImageName = argv[1];
-	cv::Mat  imgIn  = cv::imread(inputImageName,cv::IMREAD_COLOR);
+	cv::Mat imgIn  = cv::imread(inputImageName,cv::IMREAD_COLOR);
 	if(imgIn.empty())
 	{
 		std::cout << "Error opening image: " << inputImageName << '\n';
@@ -78,6 +78,10 @@ int main(int argc, char** argv)
 
 	cv::Size sizeIn = imgIn.size();
 	int NpixelsIn = sizeIn.width*sizeIn.height;
+
+	// 1.1 Preprocessing
+	cv::GaussianBlur(imgIn, imgIn, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
+	cv::cvtColor(imgIn, imgIn, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
 
 	// 2. Extract keypoints
 	//  - Select some random points
@@ -91,7 +95,7 @@ int main(int argc, char** argv)
 	pixels.resize(NpixelsIn);
 	for (int i=0; i<NpixelsIn; i++)
 		pixels[i] = i;
-	
+
 	std::vector<uchar> featuresVector;
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
@@ -114,7 +118,7 @@ int main(int argc, char** argv)
 
 	// 5. Export image
 	//cv::Mat imgOut = imgFeatures.clone();
-	//cv::imwrite("media/output.jpg",imgOut);
+	cv::imwrite("media/output.jpg",imgIn);
 
 	return 0;
 }
