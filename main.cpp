@@ -1,8 +1,9 @@
-#include <iostream>
-#include <array>  // for std::array
-#include <vector> // for std::vector
-#include <ctime>  // for std::time()
-#include <numeric>// for std::iota()
+#include <iostream> // for std::cout
+#include <array>    // for std::array
+#include <vector>   // for std::vector
+#include <ctime>    // for std::time()
+#include <numeric>  // for std::iota()
+#include <sstream>  // for std::stringstream
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (cv::Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -63,24 +64,39 @@ std::vector<T> randomSelectionFromDistribution(std::vector<T> values, std::vecto
 	return outputVals;
 }
 
-// main() takes one input argument: the name of the input image
+// main() takes two input arguments: the name of the input image and the number of pixels to randomly select
 int main(int argc, char** argv)
 {
-	// 1. Load image
-	const std::string inputImageName = argv[1];
-	cv::Mat imgIn  = cv::imread(inputImageName,cv::IMREAD_COLOR);
+	// 1. Deal with main() inputs
+	// Deal with case of not enough inputs
+	if (argc<3)
+		std::cout << "Not enough inputs. Expected usage: <input image file name> <number of points to select>";
+
+	// Load image
+	const std::string inputImageName{argv[1]};
+	cv::Mat imgIn{cv::imread(inputImageName,cv::IMREAD_COLOR)};
 	if(imgIn.empty())
 	{
 		std::cout << "Error opening image: " << inputImageName << '\n';
 		return -1;
 	}
-	if(argc>2)
+
+	// Parse number of pixels to select
+	std::stringstream convert{argv[2]};
+	int NSelectedPixels{};				// The number of pixels to pseudo-randomly select
+	if (!(convert >> NSelectedPixels)) 	// Do the conversion
+	{
+		NSelectedPixels = 100; // If conversion fails, set NSelectedPixels to a default value
+		std::cout << "Could not interpret second argument as an integer. Taking dafault value of N=" << NSelectedPixels << '\n';
+	}
+
+	// Deal with case of too many inputs
+	if(argc>3)
 		std::cout << "Ignoring additional inputs";
 
+	// 1.1 Preprocess the image
 	cv::Size sizeIn = imgIn.size();             // Image dimensions
 	int NpixelsIn = sizeIn.width*sizeIn.height; // Total number of pixels (for later use)
-
-	// 1.1 Preprocessing
 	cv::GaussianBlur(imgIn, imgIn, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
 	cv::cvtColor(imgIn, imgIn, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
 
@@ -102,14 +118,13 @@ int main(int argc, char** argv)
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
 	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
-	int n = 500;                                                                // Number of pixels to choose
-	std::vector<int> selectedPixels(n+4);                                       // Vector large enough to store n randomly selected pixels, plus the four corners
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));                  // Set initial seed value to system clock
-	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);  // Pseudo-random selection of pixels based on edge detection
-	selectedPixels.push_back(0);                                                // Top left corner
-	selectedPixels.push_back(sizeIn.width-1);                                   // Top right corner
-	selectedPixels.push_back(NpixelsIn-sizeIn.width+1);                         // Bottom right corner
-	selectedPixels.push_back(NpixelsIn);                                        // Bottom left corner
+	std::vector<int> selectedPixels(NSelectedPixels+4);                                      // Vector large enough to store NSelectedPixels randomly selected pixels, plus the four corners
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));                               // Set initial seed value to system clock
+	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,NSelectedPixels); // Pseudo-random selection of pixels based on edge detection
+	selectedPixels.push_back(0);                                                             // Top left corner
+	selectedPixels.push_back(sizeIn.width-1);                                                // Top right corner
+	selectedPixels.push_back(NpixelsIn-sizeIn.width+1);                                      // Bottom right corner
+	selectedPixels.push_back(NpixelsIn);                                                     // Bottom left corner
 
 	// 2.3 Add some randomisation / move pixels slightly (todo)
 
