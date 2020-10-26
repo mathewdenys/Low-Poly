@@ -11,7 +11,7 @@
 
 // Calculate the cumulative sums of a std::vector of integers
 // e.g. {1,2,3,-2} -> {1,3,6,4}
-std::vector<int> calculateCumulativeSum(std::vector<int> input)
+std::vector<int> calculateCumulativeSum(std::vector<int>& input)
 {
 	std::vector<int> cumulativeSum(input.size());
 	cumulativeSum[0] = input[0];
@@ -35,7 +35,7 @@ int getRandomNumber(int min, int max)
 // Returns -1 if r > max(arr)
 // Assumes arr.size() actually corresponds to the number of values assigned to arr
 // From (with modification): https://www.geeksforgeeks.org/random-number-generator-in-arbitrary-probability-distribution-fashion/
-int findCeil(std::vector<int> arr, int r)
+int findCeil(std::vector<int>& arr, int r)
 {
 	int mid;
 	int l = 0;
@@ -50,7 +50,7 @@ int findCeil(std::vector<int> arr, int r)
 
 // Returns 'n' random value from the vector 'values' according to the distribution given by the vector 'freqs'
 template<typename T>
-std::vector<T> randomSelectionFromDistribution(std::vector<T> values, std::vector<int> freqs, int n)
+std::vector<T> randomSelectionFromDistribution(std::vector<T>& values, std::vector<int>& freqs, int n)
 {
 	std::vector<int> freqCumSum = calculateCumulativeSum(freqs);
 	std::vector<T>   outputVals;
