@@ -2,6 +2,7 @@
 #include <array>  // for std::array
 #include <vector> // for std::vector
 #include <ctime>  // for std::time()
+#include <numeric>// for std::iota()
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (cv::Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -11,8 +12,7 @@
 // e.g. {1,2,3,-2} -> {1,3,6,4}
 std::vector<int> calculateCumulativeSum(std::vector<int> input)
 {
-	std::vector<int> cumulativeSum;
-	cumulativeSum.resize(input.size());
+	std::vector<int> cumulativeSum(input.size());
 	cumulativeSum[0] = input[0];
 	for(int i=1; i<input.size(); i++)
 		cumulativeSum[i] = input[i] + cumulativeSum[i-1];
@@ -77,8 +77,8 @@ int main(int argc, char** argv)
 	if(argc>2)
 		std::cout << "Ignoring additional inputs";
 
-	cv::Size sizeIn = imgIn.size();
-	int NpixelsIn = sizeIn.width*sizeIn.height;
+	cv::Size sizeIn = imgIn.size();				// Image dimensions
+	int NpixelsIn = sizeIn.width*sizeIn.height; // Total number of pixels (for later use)
 
 	// 1.1 Preprocessing
 	cv::GaussianBlur(imgIn, imgIn, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
@@ -89,25 +89,22 @@ int main(int argc, char** argv)
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
 	cv::Mat imgFeatures;
-	int depth = CV_16S; // depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
-	cv::Laplacian(imgIn,imgFeatures,depth); // edge detection
-	cv::convertScaleAbs(imgFeatures,imgFeatures); // take absolute value of values and convert back to 8 bits
+	int depth = CV_16S; 						  // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
+	cv::Laplacian(imgIn,imgFeatures,depth); 	  // Edge detection
+	cv::convertScaleAbs(imgFeatures,imgFeatures); // Take absolute value of values and convert back to 8 bits
 
 	// 2.2 Select pixels pseudo-randomly
-	std::vector<int> pixels;
-	pixels.resize(NpixelsIn);
-	for (int i=0; i<NpixelsIn; i++)
-		pixels[i] = i;
+	std::vector<int> pixels(NpixelsIn);					// Vector for storing pixel numbers
+	std::iota(std::begin(pixels), std::end(pixels), 0); // Fill with 0, 1, ..., NpixelsIn
 
 	std::vector<int> featuresVector;
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
-	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
 	int n = 500; // number of pixels to choose
-	std::vector<int> selectedPixels;
-	selectedPixels.resize(n);
-	std::srand(static_cast<unsigned int>(std::time(nullptr))); // set initial seed value to system clock
+	std::vector<int> selectedPixels(n);
+	std::srand(static_cast<unsigned int>(std::time(nullptr))); // Set initial seed value to system clock
 	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);
 
 	// 2.3 Add some randomisation / move pixels slightly (todo)
