@@ -77,6 +77,7 @@ int main(int argc, char** argv)
 	if(argc>2) std::cout << "Ignoring additional inputs";
 
 	cv::Size sizeIn = imgIn.size();
+	int NpixelsIn = sizeIn.width*sizeIn.height;
 
 	// 2. Extract keypoints
 	//  - Select some random points
@@ -86,8 +87,25 @@ int main(int argc, char** argv)
 
 	std::srand(static_cast<unsigned int>(std::time(nullptr))); // set initial seed value to system clock
 	// todo: use randomSelectionFromDistribution to take a random selection of pixel coordiantes from imgIn using imgFeatures as a distribution
-	//size_t widthheight = sizeIn.width*sizeIn.height;
-	//std::array<int,widthheight> pixels;
+	std::vector<int> pixels;
+	pixels.resize(NpixelsIn);
+	for (int i=0; i<NpixelsIn; i++)
+		pixels[i] = i;
+	
+	std::vector<uchar> featuresVector;
+	if(!imgFeatures.isContinuous())
+		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // assumes only one channel (imgFeatures is greyscale)
+
+	// ISSUES:
+	//	1) depth of imgFeatures is 6, which corresponds to float64 values (not int) (?)
+	// 	2) imgFeatures values can be negative, so I need to make them all positive
+
+	int n = 10; // number of pixels to choose
+	//std::vector<int> selectedPixels;
+	//selectedPixels.resize(n);
+	//selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,n);
+
 
 	// 3. Create polygons
 	//  - Delaunay triangulation
