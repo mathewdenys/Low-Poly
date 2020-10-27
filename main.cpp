@@ -11,6 +11,8 @@
 
 #include "delaunator.hpp"   // for Delaunay triangulation
 
+using triangleArray = std::vector<std::array<cv::Point,3> >;
+
 // Calculate the cumulative sums of a std::vector of integers
 // e.g. {1,2,3,-2} -> {1,3,6,4}
 std::vector<int> calculateCumulativeSum(std::vector<int>& input)
@@ -66,10 +68,71 @@ std::vector<T> randomSelectionFromDistribution(std::vector<T>& values, std::vect
 	return outputVals;
 }
 
+// Select Npixels pixels from imgFeatures. Returns a vector of selected pixel "numbers" (counting from top left to bottom right).
+// imgFeatures in a greyscale image in which the intensity indicates how "important" that pixel is.
+// In practice, imgFeatures is the output of edge detection, but this is not necessarily required
+std::vector<int> selectPixels(cv::Mat& imgFeatures, int Npixels)
+{
+	std::vector<int> pixels(imgFeatures.total());       // Vector for storing pixel numbers
+	std::iota(std::begin(pixels), std::end(pixels), 0); // Fill with 0, 1, ..., imgFeatures.total()-1
+
+	std::vector<int> featuresVector;
+	if(!imgFeatures.isContinuous())
+		imgFeatures = imgFeatures.reshape(1,imgFeatures.total());
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); 	 // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
+
+	std::vector<int> selectedPixels(Npixels+4);                                      // Vector large enough to store NSelectedPixels randomly selected pixels, plus the four corners
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));                       // Set initial seed value to system clock
+	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,Npixels); // Pseudo-random selection of pixels based on edge detection
+	selectedPixels.push_back(0);                                                     // Top left corner
+	selectedPixels.push_back(imgFeatures.size().width-1);                            // Top right corner
+	selectedPixels.push_back(imgFeatures.total()-imgFeatures.size().width+1);        // Bottom right corner
+	selectedPixels.push_back(imgFeatures.total()-1);                                 // Bottom left corner
+
+	return selectedPixels;
+}
+
+// Take a Delaunator and return a vector containing an array of vertices for each triangle in the Delaunay mesh
+triangleArray makeTrianglesFromMesh(const delaunator::Delaunator& mesh)
+{
+	triangleArray triangles;                    // Vector to store arrays of coordinates for each triangle
+	triangles.reserve(mesh.triangles.size()/3); // mesh.triangles lists vertices for each triangle
+	for (int nTriangle = 0; nTriangle*3 < mesh.triangles.size(); nTriangle++)
+	{
+		int nPoint = nTriangle*3;
+		int x1 = mesh.coords[2*mesh.triangles[nPoint]];
+		int y1 = mesh.coords[2*mesh.triangles[nPoint]   + 1];
+		int x2 = mesh.coords[2*mesh.triangles[nPoint+1]];
+		int y2 = mesh.coords[2*mesh.triangles[nPoint+1] + 1];
+		int x3 = mesh.coords[2*mesh.triangles[nPoint+2]];
+		int y3 = mesh.coords[2*mesh.triangles[nPoint+2] + 1];
+		cv::Point p1 {x1, y1};
+		cv::Point p2 {x2, y2};
+		cv::Point p3 {x3, y3};
+		triangles.push_back(std::array<cv::Point,3> {p1,p2,p3});
+	}
+
+	return triangles;
+}
+
+// Draw the triangles stored in the `triangles` vector on imgOut.
+// The colour of each triangle is determined by the mean colour of the corresponding pixels in imgIn.
+// `triangles` is assumed to correspond at least to an image of the same size as imgIn and imgOut.
+void drawTriangles(const cv::Mat& imgIn, cv::Mat& imgOut, const triangleArray& triangles)
+{
+	cv::Mat mask;
+	for (int i=0; i<triangles.size(); i++)                                  // Draw each triangle onto the image (with colour)
+	{
+		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);                 // Reset mask for each triangle
+		fillPoly(mask,   triangles.at(i), cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
+		fillPoly(imgOut, triangles.at(i), cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
+	}
+}
+
 // main() takes two input arguments: the name of the input image and the number of pixels to randomly select
 int main(int argc, char** argv)
 {
-	// 1. Deal with main() inputs
+	// PARSING INPUT ARGUMENTS
 	// Deal with case of not enough inputs
 	if (argc<3)
 		std::cout << "Not enough inputs. Expected usage: <input image file name> <number of points to select>";
@@ -88,7 +151,7 @@ int main(int argc, char** argv)
 	int NSelectedPixels{};              // The number of pixels to pseudo-randomly select
 	if (!(convert >> NSelectedPixels))  // Do the conversion
 	{
-		NSelectedPixels = 100; // If conversion fails, set NSelectedPixels to a default value
+		NSelectedPixels = 100;          // If conversion fails, set NSelectedPixels to a default value
 		std::cout << "Could not interpret second argument as an integer. Taking dafault value of N=" << NSelectedPixels << '\n';
 	}
 
@@ -96,88 +159,33 @@ int main(int argc, char** argv)
 	if(argc>3)
 		std::cout << "Ignoring additional inputs";
 
-	// 1.1 Preprocess the image
-	cv::Size sizeIn = imgIn.size();             // Image dimensions
-	int NpixelsIn = sizeIn.width*sizeIn.height; // Total number of pixels (for later use)
-
+	// LOW POLYFICATION
 	cv::Mat imgProcessed;
-	cv::GaussianBlur(imgIn, imgIn, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
-	cv::cvtColor(imgIn, imgProcessed, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
+	cv::GaussianBlur(imgIn, imgProcessed, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
+	cv::cvtColor(imgProcessed, imgProcessed, cv::COLOR_BGR2GRAY);                    // Convert to greyscale
 
-	// 2. Extract keypoints
-	// 2.1 Edge detection
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
+	int depth = CV_16S;                                          // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
 	cv::Mat imgFeatures;
-	int depth = CV_16S;                            // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
-	cv::Laplacian(imgProcessed,imgFeatures,depth); // Edge detection
-	cv::convertScaleAbs(imgFeatures,imgFeatures);  // Take absolute value of values and convert back to 8 bits
+	cv::Laplacian(imgProcessed,imgFeatures,depth);               // Edge detection
+	cv::convertScaleAbs(imgFeatures,imgFeatures);                // Take absolute value of pixel values and convert back to 8 bits
 
-	// 2.2 Select pixels pseudo-randomly
-	std::vector<int> pixels(NpixelsIn);                 // Vector for storing pixel numbers
-	std::iota(std::begin(pixels), std::end(pixels), 0); // Fill with 0, 1, ..., NpixelsIn
+	std::vector<int> selectedPixels = selectPixels(imgFeatures, NSelectedPixels); // Select pixels (for triangle vertices) pseudo-randomly
 
-	std::vector<int> featuresVector;
-	if(!imgFeatures.isContinuous())
-		imgFeatures = imgFeatures.reshape(1,NpixelsIn);
-	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
-
-	std::vector<int> selectedPixels(NSelectedPixels+4);                                      // Vector large enough to store NSelectedPixels randomly selected pixels, plus the four corners
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));                               // Set initial seed value to system clock
-	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,NSelectedPixels); // Pseudo-random selection of pixels based on edge detection
-	selectedPixels.push_back(0);                                                             // Top left corner
-	selectedPixels.push_back(sizeIn.width-1);                                                // Top right corner
-	selectedPixels.push_back(NpixelsIn-sizeIn.width+1);                                      // Bottom right corner
-	selectedPixels.push_back(NpixelsIn-1);                                                   // Bottom left corner
-
-	// 2.3 Add some randomisation / move pixels slightly (todo)
-
-	// 2.4 Visualise selected points
-	cv::Point center;
+	std::vector<double> coords(2*selectedPixels.size());         // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
 	for (int i=0; i<selectedPixels.size(); i++)
 	{
-		center = cv::Point{selectedPixels[i]%sizeIn.width,selectedPixels[i]/sizeIn.width};
-		circle(imgFeatures,center,5,CV_RGB(255,255,255),3);
+		coords.push_back(selectedPixels[i]%imgIn.size().width);  // x coordinate for ith point
+		coords.push_back(selectedPixels[i]/imgIn.size().width);  // y coordinate for ith point
 	}
 
-	// 3. Create polygons
-	std::vector<double> coords(2*selectedPixels.size()); // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
-	for (int i=0; i<selectedPixels.size(); i++)
-	{
-		coords.push_back(selectedPixels[i]%sizeIn.width); // x coordinate for ith point
-		coords.push_back(selectedPixels[i]/sizeIn.width); // y coordinate for ith point
-	}
-
-	delaunator::Delaunator mesh(coords); // Performs the triangulation
-
-	std::vector<std::array<cv::Point,3> > triangles; // Vector to store arrays of coordinates for each triangle
-	triangles.reserve(mesh.triangles.size()/3);      // mesh.triangles lists vertices for each triangle
-	for (int nTriangle = 0; nTriangle*3 < mesh.triangles.size(); nTriangle++)
-	{
-		int nPoint = nTriangle*3;
-		int x1 = mesh.coords[2*mesh.triangles[nPoint]];
-		int y1 = mesh.coords[2*mesh.triangles[nPoint]   + 1];
-		int x2 = mesh.coords[2*mesh.triangles[nPoint+1]];
-		int y2 = mesh.coords[2*mesh.triangles[nPoint+1] + 1];
-		int x3 = mesh.coords[2*mesh.triangles[nPoint+2]];
-		int y3 = mesh.coords[2*mesh.triangles[nPoint+2] + 1];
-		cv::Point p1 {x1, y1};
-		cv::Point p2 {x2, y2};
-		cv::Point p3 {x3, y3};
-		triangles.push_back(std::array<cv::Point,3> {p1,p2,p3});
-	}
-
-	cv::Mat mask;
+	delaunator::Delaunator mesh(coords);                         // Perform the triangulation
+	triangleArray triangles = makeTrianglesFromMesh(mesh);       // Extract triangle vertices from Delaunator
 	cv::Mat imgOut = cv::Mat::zeros(imgIn.size(), imgIn.type());
-	for (int i=0; i<triangles.size(); i++)                                  // Draw each triangle onto the image (with colour)
-	{
-		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);                 // Reset mask for each triangle
-		fillPoly(mask,   triangles.at(i), cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
-		fillPoly(imgOut, triangles.at(i), cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
-	}
+	drawTriangles(imgIn,imgOut,triangles);                       // Draw the (coloured) triangles on imgOut
 
-	// 5. Export image
-	cv::imwrite("media/output.jpg",imgOut);
+	cv::imwrite("media/output.jpg",imgOut);                      // Export image
 
 	return 0;
 }
