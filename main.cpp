@@ -151,7 +151,7 @@ int main(int argc, char** argv)
 	delaunator::Delaunator mesh(coords); // Performs the triangulation
 
 	std::vector<std::array<cv::Point,3> > triangles; // Vector to store arrays of coordinates for each triangle
-	//triangles.reserve(???); // todo: reserve some memory for `triangles` (need to know how many trianlges there)
+	triangles.reserve(mesh.triangles.size()/3);      // mesh.triangles lists vertices for each triangle
 	for (int nTriangle = 0; nTriangle*3 < mesh.triangles.size(); nTriangle++)
 	{
 		int nPoint = nTriangle*3;
@@ -169,9 +169,9 @@ int main(int argc, char** argv)
 
 	cv::Mat mask;
 	cv::Mat imgOut = cv::Mat::zeros(imgIn.size(), imgIn.type());
-	for (int i=0; i<triangles.size(); i++) 									// Draw each triangle onto the image (with colour)
+	for (int i=0; i<triangles.size(); i++)                                  // Draw each triangle onto the image (with colour)
 	{
-		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);					// Reset mask for each triangle
+		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);                 // Reset mask for each triangle
 		fillPoly(mask,   triangles.at(i), cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
 		fillPoly(imgOut, triangles.at(i), cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
 	}
