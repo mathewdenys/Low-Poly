@@ -118,11 +118,11 @@ triangleArray makeTrianglesFromMesh(const delaunator::Delaunator& mesh)
 void drawTriangles(const cv::Mat& imgIn, cv::Mat& imgOut, const triangleArray& triangles)
 {
 	cv::Mat mask;
-	for (int i=0; i<triangles.size(); i++)                                  // Draw each triangle onto the image (with colour)
+	for (auto triangle : triangles)                                  // Draw each triangle onto the image (with colour)
 	{
-		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);                 // Reset mask for each triangle
-		fillPoly(mask,   triangles.at(i), cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
-		fillPoly(imgOut, triangles.at(i), cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
+		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);          // Reset mask for each triangle
+		fillPoly(mask,   triangle, cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
+		fillPoly(imgOut, triangle, cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
 	}
 }
 
@@ -171,10 +171,10 @@ int main(int argc, char** argv)
 	std::vector<int> selectedPixels = selectPixels(imgFeatures, NSelectedPixels); // Select pixels (for triangle vertices) pseudo-randomly
 
 	std::vector<double> coords(2*selectedPixels.size());         // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
-	for (int i=0; i<selectedPixels.size(); i++)
+	for (int pixel : selectedPixels)
 	{
-		coords.push_back(selectedPixels[i]%imgIn.size().width);  // x coordinate for ith point
-		coords.push_back(selectedPixels[i]/imgIn.size().width);  // y coordinate for ith point
+		coords.push_back(pixel%imgIn.size().width);  // x coordinate for ith point
+		coords.push_back(pixel/imgIn.size().width);  // y coordinate for ith point
 	}
 
 	delaunator::Delaunator mesh(coords);                         // Perform the triangulation
