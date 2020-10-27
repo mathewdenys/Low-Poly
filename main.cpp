@@ -9,6 +9,8 @@
 #include <opencv2/imgcodecs.hpp> // for reading and writing
 #include <opencv2/imgproc.hpp>   // for GaussianBlur
 
+#include "delaunator.hpp"   // for Delaunay triangulation
+
 // Calculate the cumulative sums of a std::vector of integers
 // e.g. {1,2,3,-2} -> {1,3,6,4}
 std::vector<int> calculateCumulativeSum(std::vector<int>& input)
@@ -83,8 +85,8 @@ int main(int argc, char** argv)
 
 	// Parse number of pixels to select
 	std::stringstream convert{argv[2]};
-	int NSelectedPixels{};				// The number of pixels to pseudo-randomly select
-	if (!(convert >> NSelectedPixels)) 	// Do the conversion
+	int NSelectedPixels{};              // The number of pixels to pseudo-randomly select
+	if (!(convert >> NSelectedPixels))  // Do the conversion
 	{
 		NSelectedPixels = 100; // If conversion fails, set NSelectedPixels to a default value
 		std::cout << "Could not interpret second argument as an integer. Taking dafault value of N=" << NSelectedPixels << '\n';
@@ -133,13 +135,38 @@ int main(int argc, char** argv)
 	for (int i=0; i<selectedPixels.size(); i++)
 	{
 		center = cv::Point{selectedPixels[i]%sizeIn.width,selectedPixels[i]/sizeIn.width};
-		circle(imgFeatures,center,2,CV_RGB(255,255,255),3);
+		circle(imgFeatures,center,5,CV_RGB(255,255,255),3);
 	}
 
 	// 3. Create polygons
-	//  - Delaunay triangulation
+	std::vector<double> coords(2*selectedPixels.size()); // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
+	for (int i=0; i<selectedPixels.size(); i++)
+	{
+		coords.push_back(selectedPixels[i]%sizeIn.width); // x coordinate for ith point
+		coords.push_back(selectedPixels[i]/sizeIn.width); // y coordinate for ith point
+	}
 
-	// 4. Colour polygons
+	delaunator::Delaunator mesh(coords); // Performs the triangulation
+
+	std::vector<std::array<cv::Point,3> > triangles; // Vector to store arrays of coordinates for each triangle
+	//triangles.reserve(???); // todo: reserve some memory for `triangles` (how to know how many trianlges there are???)
+	for (int nTriangle = 0; nTriangle*3 < mesh.triangles.size(); nTriangle++)
+	{
+		int nPoint = nTriangle*3;
+		int x1 = mesh.coords[2*mesh.triangles[nPoint]];
+		int y1 = mesh.coords[2*mesh.triangles[nPoint]   + 1];
+		int x2 = mesh.coords[2*mesh.triangles[nPoint+1]];
+		int y2 = mesh.coords[2*mesh.triangles[nPoint+1] + 1];
+		int x3 = mesh.coords[2*mesh.triangles[nPoint+2]];
+		int y3 = mesh.coords[2*mesh.triangles[nPoint+2] + 1];
+		cv::Point p1 {x1, y1};
+		cv::Point p2 {x2, y2};
+		cv::Point p3 {x3, y3};
+		triangles.push_back(std::array<cv::Point,3> {p1,p2,p3});
+	}
+
+	for (int i=0; i<triangles.size(); i++) // Draw each triangle onto the image
+		fillPoly(imgFeatures, triangles.at(i), cv::Scalar(255-i, 255-i, 255-i), 8, 0); // meaninless colours for now (and could go below 0)
 
 	// 5. Export image
 	//cv::Mat imgOut = imgFeatures.clone();
