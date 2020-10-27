@@ -124,7 +124,7 @@ int main(int argc, char** argv)
 	selectedPixels.push_back(0);                                                             // Top left corner
 	selectedPixels.push_back(sizeIn.width-1);                                                // Top right corner
 	selectedPixels.push_back(NpixelsIn-sizeIn.width+1);                                      // Bottom right corner
-	selectedPixels.push_back(NpixelsIn);                                                     // Bottom left corner
+	selectedPixels.push_back(NpixelsIn-1);                                                   // Bottom left corner
 
 	// 2.3 Add some randomisation / move pixels slightly (todo)
 
