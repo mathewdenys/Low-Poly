@@ -99,17 +99,19 @@ int main(int argc, char** argv)
 	// 1.1 Preprocess the image
 	cv::Size sizeIn = imgIn.size();             // Image dimensions
 	int NpixelsIn = sizeIn.width*sizeIn.height; // Total number of pixels (for later use)
+
+	cv::Mat imgProcessed;
 	cv::GaussianBlur(imgIn, imgIn, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
-	cv::cvtColor(imgIn, imgIn, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
+	cv::cvtColor(imgIn, imgProcessed, cv::COLOR_BGR2GRAY);                           // Convert to greyscale
 
 	// 2. Extract keypoints
 	// 2.1 Edge detection
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
 	cv::Mat imgFeatures;
-	int depth = CV_16S;                           // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
-	cv::Laplacian(imgIn,imgFeatures,depth);       // Edge detection
-	cv::convertScaleAbs(imgFeatures,imgFeatures); // Take absolute value of values and convert back to 8 bits
+	int depth = CV_16S;                            // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
+	cv::Laplacian(imgProcessed,imgFeatures,depth); // Edge detection
+	cv::convertScaleAbs(imgFeatures,imgFeatures);  // Take absolute value of values and convert back to 8 bits
 
 	// 2.2 Select pixels pseudo-randomly
 	std::vector<int> pixels(NpixelsIn);                 // Vector for storing pixel numbers
@@ -149,7 +151,7 @@ int main(int argc, char** argv)
 	delaunator::Delaunator mesh(coords); // Performs the triangulation
 
 	std::vector<std::array<cv::Point,3> > triangles; // Vector to store arrays of coordinates for each triangle
-	//triangles.reserve(???); // todo: reserve some memory for `triangles` (how to know how many trianlges there are???)
+	//triangles.reserve(???); // todo: reserve some memory for `triangles` (need to know how many trianlges there)
 	for (int nTriangle = 0; nTriangle*3 < mesh.triangles.size(); nTriangle++)
 	{
 		int nPoint = nTriangle*3;
@@ -165,12 +167,17 @@ int main(int argc, char** argv)
 		triangles.push_back(std::array<cv::Point,3> {p1,p2,p3});
 	}
 
-	for (int i=0; i<triangles.size(); i++) // Draw each triangle onto the image
-		fillPoly(imgFeatures, triangles.at(i), cv::Scalar(255-i, 255-i, 255-i), 8, 0); // meaninless colours for now (and could go below 0)
+	cv::Mat mask;
+	cv::Mat imgOut = cv::Mat::zeros(imgIn.size(), imgIn.type());
+	for (int i=0; i<triangles.size(); i++) 									// Draw each triangle onto the image (with colour)
+	{
+		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);					// Reset mask for each triangle
+		fillPoly(mask,   triangles.at(i), cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
+		fillPoly(imgOut, triangles.at(i), cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
+	}
 
 	// 5. Export image
-	//cv::Mat imgOut = imgFeatures.clone();
-	cv::imwrite("media/output.jpg",imgFeatures);
+	cv::imwrite("media/output.jpg",imgOut);
 
 	return 0;
 }
