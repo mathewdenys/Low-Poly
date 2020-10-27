@@ -52,18 +52,18 @@ int findCeil(std::vector<int>& arr, int r)
 	return (arr[l] >= r) ? l : -1;
 }
 
-// Returns 'n' random value from the vector 'values' according to the distribution given by the vector 'freqs'
-template<typename T>
-std::vector<T> randomSelectionFromDistribution(std::vector<T>& values, std::vector<int>& freqs, int n)
+// Returns the indices of `n` random elements of the `freqs` vector.
+// Larger values in `freqs` are more likely to be chosen.
+std::vector<int> randomSelectionFromDistribution(std::vector<int>& freqs, int n)
 {
 	std::vector<int> freqCumSum = calculateCumulativeSum(freqs);
-	std::vector<T>   outputVals;
+	std::vector<int> outputVals;
 	outputVals.reserve(n);
 	for (int i=0; i<n; i++)
 	{
 		int rand = getRandomNumber(1,freqCumSum.back()); // calculate a random number between 1 and sum(freqs)
-		int ceilingIndex = findCeil(freqCumSum,rand);    // determine the index of values to which the random number rounds up to
-		outputVals.push_back(values[ceilingIndex]);
+		int ceilingIndex = findCeil(freqCumSum,rand);    // determine the index of `values` to which the random number rounds up to
+		outputVals.push_back(ceilingIndex);
 	}
 	return outputVals;
 }
@@ -73,17 +73,14 @@ std::vector<T> randomSelectionFromDistribution(std::vector<T>& values, std::vect
 // In practice, imgFeatures is the output of edge detection, but this is not necessarily required
 std::vector<int> selectPixels(cv::Mat& imgFeatures, int Npixels)
 {
-	std::vector<int> pixels(imgFeatures.total());       // Vector for storing pixel numbers
-	std::iota(std::begin(pixels), std::end(pixels), 0); // Fill with 0, 1, ..., imgFeatures.total()-1
-
 	std::vector<int> featuresVector;
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,imgFeatures.total());
-	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); 	 // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total());    // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
 	std::vector<int> selectedPixels(Npixels+4);                                      // Vector large enough to store NSelectedPixels randomly selected pixels, plus the four corners
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));                       // Set initial seed value to system clock
-	selectedPixels = randomSelectionFromDistribution(pixels,featuresVector,Npixels); // Pseudo-random selection of pixels based on edge detection
+	selectedPixels = randomSelectionFromDistribution(featuresVector,Npixels); // Pseudo-random selection of pixels based on edge detection
 	selectedPixels.push_back(0);                                                     // Top left corner
 	selectedPixels.push_back(imgFeatures.size().width-1);                            // Top right corner
 	selectedPixels.push_back(imgFeatures.total()-imgFeatures.size().width+1);        // Bottom right corner
