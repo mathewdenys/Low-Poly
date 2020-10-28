@@ -6,19 +6,21 @@
 #include <sstream>  // for std::stringstream
 #include <cmath>    // for std::sqrt()
 
-#include <opencv2/core/mat.hpp>  // for basic OpenCV structures (cv::Mat, Scalar)
+#include <opencv2/core/mat.hpp>  // for basic OpenCV structures (Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
 #include <opencv2/imgproc.hpp>   // for GaussianBlur
 
 #include "delaunator.hpp"   // for Delaunay triangulation
 
+using std::vector;
+using cv::Mat;
 using triangleArray = std::vector<std::array<cv::Point,3> >;
 
-// Calculate the cumulative sums of a std::vector of integers
+// Calculate the cumulative sums of a vector of integers
 // e.g. {1,2,3,-2} -> {1,3,6,4}
-std::vector<int> calculateCumulativeSum(std::vector<int>& input)
+vector<int> calculateCumulativeSum(vector<int>& input)
 {
-	std::vector<int> cumulativeSum(input.size());
+	vector<int> cumulativeSum(input.size());
 	cumulativeSum[0] = input[0];
 	for(int i=1; i<input.size(); i++)
 		cumulativeSum[i] = input[i] + cumulativeSum[i-1];
@@ -31,7 +33,7 @@ std::vector<int> calculateCumulativeSum(std::vector<int>& input)
 // From: https://www.learncpp.com/cpp-tutorial/59-random-number-generation/
 int getRandomNumber(int min, int max)
 {
-	static constexpr double fraction { 1.0 / (RAND_MAX + 1.0) }; // for normalising random numbers to [0,1); static so it is only calculated once
+	static constexpr double fraction { 1.0 / (RAND_MAX + 1.0) };               // for normalising random numbers to [0,1); static so it is only calculated once
 	return min + static_cast<int>((max - min + 1) * (std::rand() * fraction)); // evenly distribute the random number across our range
 }
 
@@ -40,7 +42,7 @@ int getRandomNumber(int min, int max)
 // Returns -1 if r > max(arr)
 // Assumes arr.size() actually corresponds to the number of values assigned to arr
 // From (with modification): https://www.geeksforgeeks.org/random-number-generator-in-arbitrary-probability-distribution-fashion/
-int findCeil(std::vector<int>& arr, int r)
+int findCeil(vector<int>& arr, int r)
 {
 	int mid;
 	int l = 0;
@@ -55,10 +57,10 @@ int findCeil(std::vector<int>& arr, int r)
 
 // Returns the indices of `n` random elements of the `freqs` vector.
 // Larger values in `freqs` are more likely to be chosen. These values must be integers.
-std::vector<int> randomSelectionFromDistribution(std::vector<int>& freqs, int n)
+vector<int> randomSelectionFromDistribution(vector<int>& freqs, int n)
 {
-	std::vector<int> freqCumSum = calculateCumulativeSum(freqs);
-	std::vector<int> outputVals;
+	vector<int> freqCumSum = calculateCumulativeSum(freqs);
+	vector<int> outputVals;
 	outputVals.reserve(n);
 	for (int i=0; i<n; i++)
 	{
@@ -70,9 +72,9 @@ std::vector<int> randomSelectionFromDistribution(std::vector<int>& freqs, int n)
 }
 
 // Returns `n` random elements between `min` and `max`
-std::vector<int> randomIntegersFromRange(int min, int max, int n)
+vector<int> randomIntegersFromRange(int min, int max, int n)
 {
-	std::vector<int> outputVals;
+	vector<int> outputVals;
 	outputVals.reserve(n);
 	for (int i=0; i<n; i++)
 		outputVals.push_back(getRandomNumber(min,max));
@@ -83,9 +85,9 @@ std::vector<int> randomIntegersFromRange(int min, int max, int n)
 // Returns a vector of selected pixel "numbers" (counting from top left to bottom right).
 // imgFeatures in a greyscale image in which the intensity indicates how "important" that pixel is.
 // In practice, imgFeatures is the output of edge detection, but this is not necessarily required
-std::vector<int> selectPixels(cv::Mat& imgFeatures, int Npixels)
+vector<int> selectPixels(Mat& imgFeatures, int Npixels)
 {
-	std::vector<int> featuresVector;                                              // 1D array to store values of (possibly) 2D imgFeatures.data
+	vector<int> featuresVector;                                                   // 1D array to store values of (possibly) 2D imgFeatures.data
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,imgFeatures.total());
 	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
@@ -96,19 +98,19 @@ std::vector<int> selectPixels(cv::Mat& imgFeatures, int Npixels)
 	int nLeftRight = std::sqrt(Npixels) * height/(height+width);                  // Number of pixels to choose along the left and right borders
 	int nTopBottom = std::sqrt(Npixels) *  width/(height+width);                  // Number of pixels to choose along the top and bottom borders
 
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));                    				// Set initial seed value to system clock
-	std::vector<int> selectedPixels = randomSelectionFromDistribution(featuresVector,Npixels);  // Pseudo-random selection of pixels based on edge detection
-	selectedPixels.reserve(Npixels+2*nLeftRight + 2*nTopBottom + 4); 							// Large enough to store NSelectedPixels pixels, plus randomly selected pixels from sides and corners (below)
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));                             // Set initial seed value to system clock
+	vector<int> selectedPixels = randomSelectionFromDistribution(featuresVector,Npixels);  // Pseudo-random selection of pixels based on edge detection
+	selectedPixels.reserve(Npixels+2*nLeftRight + 2*nTopBottom + 4);                       // Large enough to store NSelectedPixels pixels, plus randomly selected pixels from sides and corners (below)
 
 	selectedPixels.push_back(0);                                 // Top left corner
 	selectedPixels.push_back(width-1);                           // Top right corner
 	selectedPixels.push_back(imgFeatures.total()-width+1);       // Bottom right corner
 	selectedPixels.push_back(imgFeatures.total()-1);             // Bottom left corner
 
-	std::vector<int> selectedIndicesT = randomIntegersFromRange(1, width-2,  nTopBottom); // Top border
-	std::vector<int> selectedIndicesB = randomIntegersFromRange(1, width-2,  nTopBottom); // Bottom border
-	std::vector<int> selectedIndicesL = randomIntegersFromRange(1, height-2, nLeftRight); // Left border
-	std::vector<int> selectedIndicesR = randomIntegersFromRange(1, height-2, nLeftRight); // Right border
+	vector<int> selectedIndicesT = randomIntegersFromRange(1, width-2,  nTopBottom); // Top border
+	vector<int> selectedIndicesB = randomIntegersFromRange(1, width-2,  nTopBottom); // Bottom border
+	vector<int> selectedIndicesL = randomIntegersFromRange(1, height-2, nLeftRight); // Left border
+	vector<int> selectedIndicesR = randomIntegersFromRange(1, height-2, nLeftRight); // Right border
 
 	for (int el : selectedIndicesT)
 		selectedPixels.push_back(el);                                   // Indices of top border (excluding corners) are 1, 2, ..., width-2
@@ -148,12 +150,12 @@ triangleArray makeTrianglesFromMesh(const delaunator::Delaunator& mesh)
 // Draw the triangles stored in the `triangles` vector on imgOut.
 // The colour of each triangle is determined by the mean colour of the corresponding pixels in imgIn.
 // `triangles` is assumed to correspond at least to an image of the same size as imgIn and imgOut.
-void drawTriangles(const cv::Mat& imgIn, cv::Mat& imgOut, const triangleArray& triangles)
+void drawTriangles(const Mat& imgIn, Mat& imgOut, const triangleArray& triangles)
 {
-	cv::Mat mask;
+	Mat mask;
 	for (auto triangle : triangles)                                  // Draw each triangle onto the image (with colour)
 	{
-		cv::Mat mask = cv::Mat::zeros(imgIn.size(), CV_8U);          // Reset mask for each triangle
+		Mat mask = Mat::zeros(imgIn.size(), CV_8U);                  // Reset mask for each triangle
 		fillPoly(mask,   triangle, cv::Scalar(255,255,255), 8, 0);   // Make a triangle shaped mask (for finding the average colour below)
 		fillPoly(imgOut, triangle, cv::mean(imgIn,mask),    8, 0);   // Draw coloured triangles on imgOut
 	}
@@ -169,7 +171,7 @@ int main(int argc, char** argv)
 
 	// Load image
 	const std::string inputImageName{argv[1]};
-	cv::Mat imgIn{cv::imread(inputImageName,cv::IMREAD_COLOR)};
+	Mat imgIn{cv::imread(inputImageName,cv::IMREAD_COLOR)};
 	if(imgIn.empty())
 	{
 		std::cout << "Error opening image: " << inputImageName << '\n';
@@ -190,20 +192,20 @@ int main(int argc, char** argv)
 		std::cout << "Ignoring additional inputs";
 
 	// LOW POLYFICATION
-	cv::Mat imgProcessed;
+	Mat imgProcessed;
 	cv::GaussianBlur(imgIn, imgProcessed, cv::Size(3, 3), 0, 0, cv::BORDER_DEFAULT); // Reduce noise with Gaussian blur (kernel size = 3)
 	cv::cvtColor(imgProcessed, imgProcessed, cv::COLOR_BGR2GRAY);                    // Convert to greyscale
 
 	if (!imgIn.depth()==0)
 		std::cout << "Input image has depth!=0; this may need to be addressed";
 	int depth = CV_16S;                                          // Depth of the output image (input assumed to be CV_8U; don't want overflow; laplacian can be negative)
-	cv::Mat imgFeatures;
+	Mat imgFeatures;
 	cv::Laplacian(imgProcessed,imgFeatures,depth);               // Edge detection
 	cv::convertScaleAbs(imgFeatures,imgFeatures);                // Take absolute value of pixel values and convert back to 8 bits
 
-	std::vector<int> selectedPixels = selectPixels(imgFeatures, NSelectedPixels); // Select pixels (for triangle vertices) pseudo-randomly
+	vector<int> selectedPixels = selectPixels(imgFeatures, NSelectedPixels); // Select pixels (for triangle vertices) pseudo-randomly
 
-	std::vector<double> coords(2*selectedPixels.size());         // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
+	vector<double> coords(2*selectedPixels.size());              // Holds coordinates of chosen points in the format {x1,y1,x2,y2,x3,y3,...} required by Delaunator below
 	for (int pixel : selectedPixels)
 	{
 		coords.push_back(pixel%imgIn.size().width);  // x coordinate for ith point
@@ -212,7 +214,7 @@ int main(int argc, char** argv)
 
 	delaunator::Delaunator mesh(coords);                         // Perform the triangulation
 	triangleArray triangles = makeTrianglesFromMesh(mesh);       // Extract triangle vertices from Delaunator
-	cv::Mat imgOut = cv::Mat::zeros(imgIn.size(), imgIn.type());
+	Mat imgOut = Mat::zeros(imgIn.size(), imgIn.type());
 	drawTriangles(imgIn,imgOut,triangles);                       // Draw the (coloured) triangles on imgOut
 
 	cv::imwrite("media/output.jpg",imgOut);                      // Export image
