@@ -4,6 +4,7 @@
 #include <ctime>    // for std::time()
 #include <numeric>  // for std::iota()
 #include <sstream>  // for std::stringstream
+#include <cmath>    // for std::sqrt()
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (cv::Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -53,7 +54,7 @@ int findCeil(std::vector<int>& arr, int r)
 }
 
 // Returns the indices of `n` random elements of the `freqs` vector.
-// Larger values in `freqs` are more likely to be chosen.
+// Larger values in `freqs` are more likely to be chosen. These values must be integers.
 std::vector<int> randomSelectionFromDistribution(std::vector<int>& freqs, int n)
 {
 	std::vector<int> freqCumSum = calculateCumulativeSum(freqs);
@@ -68,23 +69,55 @@ std::vector<int> randomSelectionFromDistribution(std::vector<int>& freqs, int n)
 	return outputVals;
 }
 
-// Select Npixels pixels from imgFeatures. Returns a vector of selected pixel "numbers" (counting from top left to bottom right).
+// Returns `n` random elements between `min` and `max`
+std::vector<int> randomIntegersFromRange(int min, int max, int n)
+{
+	std::vector<int> outputVals;
+	outputVals.reserve(n);
+	for (int i=0; i<n; i++)
+		outputVals.push_back(getRandomNumber(min,max));
+	return outputVals;
+}
+
+// Select approximately Npixels pixels from imgFeatures.
+// Returns a vector of selected pixel "numbers" (counting from top left to bottom right).
 // imgFeatures in a greyscale image in which the intensity indicates how "important" that pixel is.
 // In practice, imgFeatures is the output of edge detection, but this is not necessarily required
 std::vector<int> selectPixels(cv::Mat& imgFeatures, int Npixels)
 {
-	std::vector<int> featuresVector;
+	std::vector<int> featuresVector;                                              // 1D array to store values of (possibly) 2D imgFeatures.data
 	if(!imgFeatures.isContinuous())
 		imgFeatures = imgFeatures.reshape(1,imgFeatures.total());
-	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total());    // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
+	featuresVector.assign(imgFeatures.data,imgFeatures.data+imgFeatures.total()); // Assumes only one channel (imgFeatures is greyscale); uchars are cast to ints
 
-	std::vector<int> selectedPixels(Npixels+4);                                      // Vector large enough to store NSelectedPixels randomly selected pixels, plus the four corners
-	std::srand(static_cast<unsigned int>(std::time(nullptr)));                       // Set initial seed value to system clock
-	selectedPixels = randomSelectionFromDistribution(featuresVector,Npixels); // Pseudo-random selection of pixels based on edge detection
-	selectedPixels.push_back(0);                                                     // Top left corner
-	selectedPixels.push_back(imgFeatures.size().width-1);                            // Top right corner
-	selectedPixels.push_back(imgFeatures.total()-imgFeatures.size().width+1);        // Bottom right corner
-	selectedPixels.push_back(imgFeatures.total()-1);                                 // Bottom left corner
+	int width  = imgFeatures.size().width;
+	int height = imgFeatures.size().height;
+
+	int nLeftRight = std::sqrt(Npixels) * height/(height+width);                  // Number of pixels to choose along the left and right borders
+	int nTopBottom = std::sqrt(Npixels) *  width/(height+width);                  // Number of pixels to choose along the top and bottom borders
+
+	std::srand(static_cast<unsigned int>(std::time(nullptr)));                    				// Set initial seed value to system clock
+	std::vector<int> selectedPixels = randomSelectionFromDistribution(featuresVector,Npixels);  // Pseudo-random selection of pixels based on edge detection
+	selectedPixels.reserve(Npixels+2*nLeftRight + 2*nTopBottom + 4); 							// Large enough to store NSelectedPixels pixels, plus randomly selected pixels from sides and corners (below)
+
+	selectedPixels.push_back(0);                                 // Top left corner
+	selectedPixels.push_back(width-1);                           // Top right corner
+	selectedPixels.push_back(imgFeatures.total()-width+1);       // Bottom right corner
+	selectedPixels.push_back(imgFeatures.total()-1);             // Bottom left corner
+
+	std::vector<int> selectedIndicesT = randomIntegersFromRange(1, width-2,  nTopBottom); // Top border
+	std::vector<int> selectedIndicesB = randomIntegersFromRange(1, width-2,  nTopBottom); // Bottom border
+	std::vector<int> selectedIndicesL = randomIntegersFromRange(1, height-2, nLeftRight); // Left border
+	std::vector<int> selectedIndicesR = randomIntegersFromRange(1, height-2, nLeftRight); // Right border
+
+	for (int el : selectedIndicesT)
+		selectedPixels.push_back(el);                                   // Indices of top border (excluding corners) are 1, 2, ..., width-2
+	for (int el : selectedIndicesB)
+		selectedPixels.push_back(imgFeatures.total() - width - 1 + el); // Indices of bottom border (excluding corners) are (width*height)-width, (width*height)-width+1,(width*height)-1
+	for (int el : selectedIndicesL)
+		selectedPixels.push_back(el*width);                             // Indices of left border (excluding corners) are width, 2*width, ..., (height-2)*width
+	for (int el : selectedIndicesR)
+		selectedPixels.push_back((el+1)*width-1);                       // Indices of right border (excluding corners) are 2*width-1, 3*width-1, ..., (height-1)*width-1
 
 	return selectedPixels;
 }
