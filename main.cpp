@@ -5,7 +5,8 @@
 #include <numeric>  // for std::iota()
 #include <sstream>  // for std::stringstream
 #include <cmath>    // for std::sqrt()
-#include <algorithm>// for std::generate()
+#include <algorithm>// for std::generate(), std::lower_bound()
+#include <iterator> // for std::distance()
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -38,25 +39,6 @@ int getRandomNumber(int min, int max)
 	return min + static_cast<int>((max - min + 1) * (std::rand() * fraction)); // evenly distribute the random number across our range
 }
 
-// Find the index of the lowest upper bound of `r` in `arr`, e.g
-// 	findLowestUpperBoundIndex({1,4,7,10},4) -> 1 (indexing from 0)
-// 	findLowestUpperBoundIndex({1,4,7,10},5) -> 2 (indexing from 0)
-// Returns -1 if r > max(arr)
-// Assumes arr.size() actually corresponds to the number of values assigned to arr
-// From (with modification): https://www.geeksforgeeks.org/random-number-generator-in-arbitrary-probability-distribution-fashion/
-int findLowestUpperBoundIndex(vector<int>& arr, int r)
-{
-	int mid;
-	int l = 0;
-	int h = arr.size() - 1;
-	while (l < h)
-	{
-		mid = (l+h)/2;
-		(r > arr[mid]) ? (l = mid + 1) : (h = mid);
-	}
-	return (arr[l] >= r) ? l : -1;
-}
-
 // Returns the indices of `n` random elements of the `freqs` vector.
 // Larger values in `freqs` are more likely to be chosen. These values must be integers.
 vector<int> randomSelectionFromDistribution(vector<int>& freqs, int n)
@@ -66,9 +48,9 @@ vector<int> randomSelectionFromDistribution(vector<int>& freqs, int n)
 	outputVals.reserve(n);
 	for (int i=0; i<n; i++)
 	{
-		int rand = getRandomNumber(1,freqCumSum.back()); // calculate a random number between 1 and sum(freqs)
-		int ceilingIndex = findLowestUpperBoundIndex(freqCumSum,rand);    // determine the index of `values` to which the random number rounds up to
-		outputVals.push_back(ceilingIndex);
+		int rand = getRandomNumber(1,freqCumSum.back());                             // calculate a random number between 1 and sum(freqs)
+		auto ceiling = std::lower_bound(freqCumSum.begin(), freqCumSum.end(), rand); // determine the lowest upper bound of `rand` in `freqCumSum`
+		outputVals.push_back(std::distance(freqCumSum.begin(), ceiling));            // save the index of the lowest upper bound
 	}
 	return outputVals;
 }
