@@ -37,12 +37,13 @@ int getRandomNumber(int min, int max)
 	return min + static_cast<int>((max - min + 1) * (std::rand() * fraction)); // evenly distribute the random number across our range
 }
 
-// Find the index of the ceiling of r in arr
-// e.g. findCeil({1,4,7,10},2) -> 4
+// Find the index of the lowest upper bound of `r` in `arr`, e.g
+// 	findLowestUpperBoundIndex({1,4,7,10},4) -> 1 (indexing from 0)
+// 	findLowestUpperBoundIndex({1,4,7,10},5) -> 2 (indexing from 0)
 // Returns -1 if r > max(arr)
 // Assumes arr.size() actually corresponds to the number of values assigned to arr
 // From (with modification): https://www.geeksforgeeks.org/random-number-generator-in-arbitrary-probability-distribution-fashion/
-int findCeil(vector<int>& arr, int r)
+int findLowestUpperBoundIndex(vector<int>& arr, int r)
 {
 	int mid;
 	int l = 0;
@@ -65,7 +66,7 @@ vector<int> randomSelectionFromDistribution(vector<int>& freqs, int n)
 	for (int i=0; i<n; i++)
 	{
 		int rand = getRandomNumber(1,freqCumSum.back()); // calculate a random number between 1 and sum(freqs)
-		int ceilingIndex = findCeil(freqCumSum,rand);    // determine the index of `values` to which the random number rounds up to
+		int ceilingIndex = findLowestUpperBoundIndex(freqCumSum,rand);    // determine the index of `values` to which the random number rounds up to
 		outputVals.push_back(ceilingIndex);
 	}
 	return outputVals;
