@@ -5,6 +5,7 @@
 #include <numeric>  // for std::iota()
 #include <sstream>  // for std::stringstream
 #include <cmath>    // for std::sqrt()
+#include <algorithm>// for std::generate()
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -75,11 +76,11 @@ vector<int> randomSelectionFromDistribution(vector<int>& freqs, int n)
 // Returns `n` random elements between `min` and `max`
 vector<int> randomIntegersFromRange(int min, int max, int n)
 {
-	vector<int> outputVals;
-	outputVals.reserve(n);
-	for (int i=0; i<n; i++)
-		outputVals.push_back(getRandomNumber(min,max));
-	return outputVals;
+	vector<int> vals(n);
+	std::generate(vals.begin(), vals.end(), [&]() {
+		return getRandomNumber(min,max);
+	});
+	return vals;
 }
 
 // Select approximately Npixels pixels from imgFeatures.
