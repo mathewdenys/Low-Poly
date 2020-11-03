@@ -7,6 +7,7 @@
 #include <cmath>    // for std::sqrt()
 #include <algorithm>// for std::generate(), std::lower_bound()
 #include <iterator> // for std::distance()
+#include <numeric>  // for std::partial_sum()
 
 #include <opencv2/core/mat.hpp>  // for basic OpenCV structures (Mat, Scalar)
 #include <opencv2/imgcodecs.hpp> // for reading and writing
@@ -23,9 +24,7 @@ using triangleArray = std::vector<std::array<cv::Point,3> >;
 vector<int> calculateCumulativeSum(vector<int>& input)
 {
 	vector<int> cumulativeSum(input.size());
-	cumulativeSum[0] = input[0];
-	for(int i=1; i<input.size(); i++)
-		cumulativeSum[i] = input[i] + cumulativeSum[i-1];
+	std::partial_sum(input.begin(), input.end(), cumulativeSum.begin());
 	return cumulativeSum;
 }
 
